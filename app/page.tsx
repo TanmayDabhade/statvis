@@ -1,3 +1,4 @@
+'use client'
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -5,19 +6,31 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
-const StatisticalVisualizer = () => {
-  const [input, setInput] = useState('The class average is 77.31% with a standard deviation of 15.17%. Scores ranged from 24% to 100%.');
-  const [sampleSize, setSampleSize] = useState('200');
-  const [data, setData] = useState(null);
-  const [error, setError] = useState('');
+interface Stats {
+  mean: number;
+  stdDev: number;
+  min: number;
+  max: number;
+}
 
-  const parseStats = (text) => {
+interface DataPoint {
+  score: string;
+  frequency: number;
+}
+
+const StatisticalVisualizer: React.FC = () => {
+  const [input, setInput] = useState<string>('The class average is 77.31% with a standard deviation of 15.17%. Scores ranged from 24% to 100%.');
+  const [sampleSize, setSampleSize] = useState<string>('200');
+  const [data, setData] = useState<DataPoint[] | null>(null);
+  const [error, setError] = useState<string>('');
+
+  const parseStats = (text: string): Stats => {
     try {
       const meanMatch = text.match(/average is (\d+\.?\d*)%/);
       const stdDevMatch = text.match(/deviation of (\d+\.?\d*)%/);
       const rangeMatch = text.match(/from (\d+)% to (\d+)%/);
 
-      if (!meanMatch || !stdDevMatch || !rangeMatch) {
+      if (!meanMatch?.[1] || !stdDevMatch?.[1] || !rangeMatch?.[1] || !rangeMatch?.[2]) {
         throw new Error('Could not parse all required statistics from the text. Please check the format.');
       }
 
@@ -28,14 +41,19 @@ const StatisticalVisualizer = () => {
         max: parseFloat(rangeMatch[2])
       };
     } catch (e) {
-      throw new Error('Error parsing statistics: ' + e.message);
+      throw new Error(`Error parsing statistics: ${e instanceof Error ? e.message : 'Unknown error'}`);
     }
   };
 
-  const generateNormalDistribution = (stats) => {
+  const generateNormalDistribution = (stats: Stats): DataPoint[] => {
     const { mean, stdDev, min, max } = stats;
     const points = 50;
-    const data = [];
+    const data: DataPoint[] = [];
+    const sampleSizeNum = parseInt(sampleSize);
+
+    if (isNaN(sampleSizeNum) || sampleSizeNum <= 0) {
+      throw new Error('Invalid sample size');
+    }
 
     for (let i = 0; i < points; i++) {
       const x = min + (i * (max - min) / (points - 1));
@@ -43,26 +61,31 @@ const StatisticalVisualizer = () => {
                 Math.exp(-0.5 * Math.pow((x - mean) / stdDev, 2));
       data.push({
         score: x.toFixed(1),
-        frequency: Math.round(y * parseInt(sampleSize) * 100) / 100
+        frequency: Math.round(y * sampleSizeNum * 100) / 100
       });
     }
 
     return data;
   };
 
-  const handleVisualize = () => {
+  const handleVisualize = (): void => {
     try {
       setError('');
       const stats = parseStats(input);
-      if (!sampleSize || parseInt(sampleSize) <= 0) {
-        throw new Error('Please enter a valid sample size');
-      }
       const visualData = generateNormalDistribution(stats);
       setData(visualData);
     } catch (e) {
-      setError(e.message);
+      setError(e instanceof Error ? e.message : 'An unknown error occurred');
       setData(null);
     }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>): void => {
+    setInput(e.target.value);
+  };
+
+  const handleSampleSizeChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    setSampleSize(e.target.value);
   };
 
   return (
@@ -76,16 +99,17 @@ const StatisticalVisualizer = () => {
             <textarea
               className="w-full min-h-[100px] p-2 border rounded-md"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={handleInputChange}
               placeholder="Enter statistical text..."
             />
             <div className="flex space-x-4 items-center">
               <Input
                 type="number"
                 value={sampleSize}
-                onChange={(e) => setSampleSize(e.target.value)}
+                onChange={handleSampleSizeChange}
                 placeholder="Sample size"
                 className="w-32"
+                min="1"
               />
               <Button onClick={handleVisualize}>Visualize</Button>
             </div>
